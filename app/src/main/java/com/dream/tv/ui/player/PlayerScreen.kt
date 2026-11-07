@@ -76,6 +76,7 @@ import com.dream.tv.data.CmsClient
 import com.dream.tv.data.SourcesRepo
 import com.dream.tv.data.SourceSwitcher
 import com.dream.tv.data.VideoDetail
+import com.dream.tv.player.AdFilterDataSource
 import com.dream.tv.ui.glass.DtIcons
 import com.dream.tv.ui.glass.GlassSurface
 import com.dream.tv.ui.glass.glassClick
@@ -107,6 +108,7 @@ fun PlayerScreen(
 ) {
     val glass = LocalGlassColors.current
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var detail by remember { mutableStateOf<VideoDetail?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var episodeIndex by remember(sourceId, vodId) { mutableStateOf(startEpisode) }
@@ -126,7 +128,17 @@ fun PlayerScreen(
     val episode = episodes.getOrNull(episodeIndex)
 
     val player = remember {
-        ExoPlayer.Builder(context).build().apply { playWhenReady = true }
+        val adFilterOn = kotlinx.coroutines.runBlocking {
+            (context.applicationContext as com.dream.tv.DreamApp).settings.adFilter()
+        }
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(
+                    AdFilterDataSource.Factory(adFilterOn)
+                )
+            )
+            .build()
+            .apply { playWhenReady = true }
     }
     DisposableEffect(Unit) { onDispose { player.release() } }
 
@@ -218,7 +230,14 @@ fun PlayerScreen(
     DisposableEffect(detail, episodeIndex) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                android.util.Log.e("DreamTV", "player error", error)
                 playbackError = error.errorCodeName
+            }
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                // 自动连播：播完自动下一集
+                if (playbackState == Player.STATE_ENDED && episodeIndex + 1 < episodes.size) {
+                    onPlayEpisode(sourceId, vodId, episodeIndex + 1)
+                }
             }
         }
         player.addListener(listener)
@@ -237,12 +256,35 @@ fun PlayerScreen(
     var durationMs by remember { mutableLongStateOf(0L) }
     var speed by remember { mutableFloatStateOf(1f) }
 
+    // ---------- 片头片尾 ----------
+    var introMs by remember { mutableLongStateOf(0L) }
+    var outroMs by remember { mutableLongStateOf(0L) }
+    var ioPanel by remember { mutableStateOf(false) }
+    var showSkipIntro by remember { mutableStateOf(false) }
+    var outroSkipped by remember { mutableStateOf(false) }
+    LaunchedEffect(detail) {
+        val d = detail
+        if (d != null) {
+            val io = app.store.settings.introOutro(d.showIdentifier)
+            introMs = io.first; outroMs = io.second
+        }
+        outroSkipped = false
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             positionMs = player.currentPosition.coerceAtLeast(0)
             durationMs = player.duration.takeIf { it > 0 } ?: 0
             isPlaying = player.isPlaying
             speed = player.playbackParameters.speed
+            showSkipIntro = introMs > 0 && positionMs in 300 until introMs - 300
+            // 片尾自动跳：seek 到结尾触发 ENDED → 自动连播
+            if (outroMs > 0 && durationMs > 0 && !outroSkipped &&
+                positionMs > durationMs - outroMs && positionMs < durationMs - 400
+            ) {
+                outroSkipped = true
+                player.seekTo(durationMs)
+            }
             delay(400)
         }
     }
@@ -497,6 +539,62 @@ fun PlayerScreen(
             }
         }
 
+        // 跳过片头 chip
+        AnimatedVisibility(
+            visible = showSkipIntro && !locked,
+            enter = fadeIn(), exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd),
+        ) {
+            Box(
+                Modifier
+                    .padding(top = 76.dp, end = 16.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .glassClick { player.seekTo(introMs) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Text("跳过片头 ▸", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        // 片头尾设置面板
+        if (ioPanel) {
+            GlassSurface(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 14.dp, bottom = 76.dp)
+                    .width(250.dp),
+                shape = RoundedCornerShape(18.dp),
+            ) {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    val d = detail
+                    Text(
+                        "片头 ${introMs / 1000}s · 片尾 ${outroMs / 1000}s",
+                        color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    IoAction("片头结束 = 当前位置") {
+                        if (d != null) {
+                            introMs = player.currentPosition
+                            scope.launch { app.store.settings.setIntro(d.showIdentifier, introMs) }
+                        }
+                    }
+                    IoAction("片尾开始 = 当前位置") {
+                        if (d != null) {
+                            outroMs = (durationMs - player.currentPosition).coerceAtLeast(0)
+                            scope.launch { app.store.settings.setOutro(d.showIdentifier, outroMs) }
+                        }
+                    }
+                    IoAction("清除本剧设置") {
+                        if (d != null) {
+                            scope.launch { app.store.settings.clearIntroOutro(d.showIdentifier) }
+                            introMs = 0; outroMs = 0
+                        }
+                    }
+                }
+            }
+        }
+
         // 锁定模式
         if (locked) {
             AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopEnd)) {
@@ -553,6 +651,8 @@ fun PlayerScreen(
                     TopPill("换源") { sourceSheet = true }
                     Spacer(Modifier.width(10.dp))
                     TopPill(aspectMode.label) { aspectMenu = !aspectMenu }
+                    Spacer(Modifier.width(10.dp))
+                    TopPill("片头尾") { ioPanel = !ioPanel }
                     Spacer(Modifier.width(10.dp))
                     Icon(
                         DtIcons.Lock, "锁定", tint = Color.White,
@@ -731,6 +831,19 @@ fun PlayerScreen(
             )
         }
     }
+}
+
+/** 片头尾面板动作行 */
+@Composable
+private fun IoAction(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        color = Color.White, fontSize = 12.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassClick(onClick = onClick)
+            .padding(vertical = 8.dp),
+    )
 }
 
 /** 顶栏文字胶囊按钮 */

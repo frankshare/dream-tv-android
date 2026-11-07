@@ -31,7 +31,12 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +62,7 @@ import com.dream.tv.ui.theme.GlassPalette
 import com.dream.tv.ui.theme.GradientWallpapers
 import com.dream.tv.ui.theme.LocalGlassColors
 import java.io.File
+import kotlinx.coroutines.launch
 
 /** 设置 —— 外观（主题/强调色/壁纸）+ 资源站管理入口 + 关于 */
 @Composable
@@ -229,6 +235,28 @@ fun SettingsScreen(app: AppViewModel, onOpenSources: () -> Unit) {
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
                 }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        // ---------- 播放 ----------
+        SectionCard("播放") {
+            val scope = rememberCoroutineScope()
+            var adOn by remember { mutableStateOf(true) }
+            LaunchedEffect(Unit) { adOn = app.store.settings.adFilter() }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("m3u8 广告过滤", fontSize = 13.sp, color = glass.textPrimary)
+                    Text("自动剔除资源站插播的广告切片", fontSize = 10.sp, color = glass.textSecondary)
+                }
+                androidx.compose.material3.Switch(
+                    checked = adOn,
+                    onCheckedChange = {
+                        adOn = it
+                        scope.launch { app.store.settings.setAdFilter(it) }
+                    },
+                )
             }
         }
 

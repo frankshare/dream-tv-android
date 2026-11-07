@@ -53,6 +53,7 @@ class SettingsStore(private val context: Context) {
         val wallpaperPath = stringPreferencesKey("wallpaper_path")
         val disabledSources = stringSetPreferencesKey("disabled_sources")
         val lastUpdateCheck = longPreferencesKey("last_update_check")
+        val adFilter = androidx.datastore.preferences.core.booleanPreferencesKey("ad_filter")
     }
 
     val settings: Flow<GlassSettings> = context.settingsStore.data.map { p ->
@@ -91,6 +92,34 @@ class SettingsStore(private val context: Context) {
     /** 上次检查更新的时间戳（静默检查 24h 节流用） */
     suspend fun lastUpdateCheck(): Long =
         context.settingsStore.data.map { it[Keys.lastUpdateCheck] ?: 0L }.first()
+
+    // ---------- 播放偏好 ----------
+
+    suspend fun adFilter(): Boolean =
+        context.settingsStore.data.map { it[Keys.adFilter] ?: true }.first()
+
+    suspend fun setAdFilter(on: Boolean) =
+        context.settingsStore.edit { it[Keys.adFilter] = on }
+
+    /** 每部剧的片头/片尾时长（毫秒），键随 showIdentifier 动态生成 */
+    suspend fun introOutro(show: String): Pair<Long, Long> =
+        context.settingsStore.data.map { p ->
+            val i: Long = p[androidx.datastore.preferences.core.longPreferencesKey("sk_intro_$show")] ?: 0L
+            val o: Long = p[androidx.datastore.preferences.core.longPreferencesKey("sk_outro_$show")] ?: 0L
+            i to o
+        }.first()
+
+    suspend fun setIntro(show: String, ms: Long) =
+        context.settingsStore.edit { it[androidx.datastore.preferences.core.longPreferencesKey("sk_intro_$show")] = ms }
+
+    suspend fun setOutro(show: String, ms: Long) =
+        context.settingsStore.edit { it[androidx.datastore.preferences.core.longPreferencesKey("sk_outro_$show")] = ms }
+
+    suspend fun clearIntroOutro(show: String) =
+        context.settingsStore.edit {
+            it.remove(androidx.datastore.preferences.core.longPreferencesKey("sk_intro_$show"))
+            it.remove(androidx.datastore.preferences.core.longPreferencesKey("sk_outro_$show"))
+        }
 
     suspend fun setLastUpdateCheck(ts: Long) =
         context.settingsStore.edit { it[Keys.lastUpdateCheck] = ts }
