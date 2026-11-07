@@ -256,6 +256,26 @@ fun PlayerScreen(
     var durationMs by remember { mutableLongStateOf(0L) }
     var speed by remember { mutableFloatStateOf(1f) }
 
+    // ---------- 弹幕 ----------
+    var danmakuOn by remember { mutableStateOf(true) }
+    var danmakuLoading by remember { mutableStateOf(false) }
+    var danmakuComments by remember { mutableStateOf<List<com.dream.tv.data.DanmakuClient.DanmakuItem>>(emptyList()) }
+    LaunchedEffect(Unit) { danmakuOn = app.store.settings.danmakuEnabled() }
+    LaunchedEffect(detail, vodId) {
+        val d = detail ?: return@LaunchedEffect
+        danmakuComments = emptyList()
+        if (!danmakuOn) return@LaunchedEffect
+        danmakuLoading = true
+        try {
+            val eps = com.dream.tv.data.DanmakuClient.searchEpisodes(d.vod_name)
+            val ep = eps.firstOrNull()
+            if (ep != null) {
+                danmakuComments = com.dream.tv.data.DanmakuClient.fetchComments(ep.episodeId)
+            }
+        } catch (_: Exception) { }
+        danmakuLoading = false
+    }
+
     // ---------- 片头片尾 ----------
     var introMs by remember { mutableLongStateOf(0L) }
     var outroMs by remember { mutableLongStateOf(0L) }
@@ -652,7 +672,10 @@ fun PlayerScreen(
                     Spacer(Modifier.width(10.dp))
                     TopPill(aspectMode.label) { aspectMenu = !aspectMenu }
                     Spacer(Modifier.width(10.dp))
-                    TopPill("片头尾") { ioPanel = !ioPanel }
+                    TopPill(if (danmakuOn) "弹幕·开" else "弹幕·关") {
+                        danmakuOn = !danmakuOn
+                        scope.launch { app.store.settings.setDanmakuEnabled(danmakuOn) }
+                    }
                     Spacer(Modifier.width(10.dp))
                     Icon(
                         DtIcons.Lock, "锁定", tint = Color.White,

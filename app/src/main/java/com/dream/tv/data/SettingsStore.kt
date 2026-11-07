@@ -54,6 +54,7 @@ class SettingsStore(private val context: Context) {
         val disabledSources = stringSetPreferencesKey("disabled_sources")
         val lastUpdateCheck = longPreferencesKey("last_update_check")
         val adFilter = androidx.datastore.preferences.core.booleanPreferencesKey("ad_filter")
+        val danmakuEnabled = androidx.datastore.preferences.core.booleanPreferencesKey("danmaku_enabled")
     }
 
     val settings: Flow<GlassSettings> = context.settingsStore.data.map { p ->
@@ -100,6 +101,12 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setAdFilter(on: Boolean) =
         context.settingsStore.edit { it[Keys.adFilter] = on }
+
+    suspend fun danmakuEnabled(): Boolean =
+        context.settingsStore.data.map { it[Keys.danmakuEnabled] ?: true }.first()
+
+    suspend fun setDanmakuEnabled(on: Boolean) =
+        context.settingsStore.edit { it[Keys.danmakuEnabled] = on }
 
     /** 每部剧的片头/片尾时长（毫秒），键随 showIdentifier 动态生成 */
     suspend fun introOutro(show: String): Pair<Long, Long> =
