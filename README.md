@@ -3,9 +3,13 @@
 Dream TV 安卓原生版 —— Kotlin + Jetpack Compose 液态玻璃（Liquid Glass）UI，
 壁纸沉浸式风格参考 iOS 播放器「拾音」，与桌面版（`../dream-tv/`，KVideo 定制）同源同款。
 
+**仓库**：<https://github.com/frankshare/dream-tv-android>（私有）
+**下载最新 APK**：<https://github.com/frankshare/dream-tv-android/releases/latest>
+
 ## 安装
 
-直接把 **`DreamTV-1.1.0-release.apk`** 传到手机安装（微信/网盘/数据线均可）。
+手机浏览器打开上面的 Releases 链接，点 Assets 里的 APK 下载安装（覆盖安装保留收藏/历史/进度）。
+或把工程根目录的 `DreamTV-x.y.z-release.apk` 传到手机安装。首次安装需允许「未知来源」。
 
 - 首次安装会提示「未知来源应用」，允许即可
 - 支持 Android 8.0+（API 26），毛玻璃效果需 Android 12+（低版本自动降级为半透明玻璃）
