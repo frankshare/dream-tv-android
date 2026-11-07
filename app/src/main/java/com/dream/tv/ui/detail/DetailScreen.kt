@@ -1,6 +1,7 @@
 package com.dream.tv.ui.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -65,9 +68,11 @@ fun DetailScreen(
     vodId: String,
     onBack: () -> Unit,
     onPlay: (String, String, Int, Long) -> Unit,
+    onSwitchSource: (String, String) -> Unit,
 ) {
     val vm: DetailViewModel = viewModel()
     val glass = LocalGlassColors.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val state by vm.state.collectAsStateWithLifecycle()
     val favorite by vm.favorite.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
@@ -278,6 +283,14 @@ fun DetailScreen(
                             }
                         }
                     }
+                    // ---------- 换源页签（Kazumi 式：源名横排，点切） ----------
+                    item {
+                        SourceTabs(
+                            title = d.vod_name,
+                            currentSourceId = d.source,
+                            onSwitch = { s, id -> onSwitchSource(s, id) },
+                        )
+                    }
                     // ---------- 简介 ----------
                     if (!d.vod_content.isNullOrBlank()) {
                         item {
@@ -368,8 +381,7 @@ fun DetailScreen(
 
 /** 小信息胶囊 */
 @Composable
-private fun MetaPill(text: String) {
-    val glass = LocalGlassColors.current
+private fun MetaPill(text: String) {    val glass = LocalGlassColors.current
     if (text.isBlank()) return
     Box(
         Modifier
@@ -402,5 +414,85 @@ fun AccentButton(
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
         )
+    }
+}
+
+
+/** 换源页签：当前源 + 其他源同名条目（后台搜索），点即切换（Kazumi 式） */
+@Composable
+private fun SourceTabs(
+    title: String,
+    currentSourceId: String,
+    onSwitch: (String, String) -> Unit,
+) {
+    val glass = LocalGlassColors.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var alts by remember(title, currentSourceId) {
+        mutableStateOf<List<com.dream.tv.data.VideoItem>?>(null)
+    }
+    LaunchedEffect(title, currentSourceId) {
+        alts = com.dream.tv.data.SourceSwitcher.findAlternates(context, title, currentSourceId)
+    }
+    GlassSurface(shape = RoundedCornerShape(18.dp), modifier = Modifier.padding(horizontal = 20.dp)) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                "片源",
+                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = glass.textPrimary,
+            )
+            Spacer(Modifier.height(10.dp))
+            val altsList = alts
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // 当前源
+                item {
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(glass.accent.copy(alpha = 0.22f))
+                            .border(1.dp, glass.accent.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                    ) {
+                        Text(
+                            com.dream.tv.data.SourcesRepo.byId(context, currentSourceId)?.name ?: currentSourceId,
+                            fontSize = 12.sp, color = glass.accent, fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                when {
+                    altsList == null -> item {
+                        Text(
+                            "正在其他源里找同名影片…",
+                            fontSize = 12.sp, color = glass.textSecondary,
+                            modifier = Modifier.padding(vertical = 7.dp),
+                        )
+                    }
+                    altsList.isEmpty() -> item {
+                        Text(
+                            "其他源暂无同名片",
+                            fontSize = 12.sp, color = glass.textSecondary,
+                            modifier = Modifier.padding(vertical = 7.dp),
+                        )
+                    }
+                    else -> items(altsList.size) { i ->
+                        val it = altsList[i]
+                        val name = com.dream.tv.data.SourcesRepo.byId(context, it.source)?.name ?: it.source
+                        Column(
+                            Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(glass.textPrimary.copy(alpha = 0.06f))
+                                .glassClick { onSwitch(it.source, it.vod_id) }
+                                .padding(horizontal = 12.dp, vertical = 5.dp),
+                        ) {
+                            Text(name, fontSize = 12.sp, color = glass.textPrimary, maxLines = 1)
+                            if (!it.vod_remarks.isNullOrBlank()) {
+                                Text(it.vod_remarks, fontSize = 10.sp, color = glass.textSecondary, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

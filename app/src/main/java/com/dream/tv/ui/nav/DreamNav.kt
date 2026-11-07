@@ -143,6 +143,11 @@ fun DreamNavRoot(app: AppViewModel) {
                     onPlay = { s, id, ep, resume ->
                         nav.navigate(Routes.player(s, id, ep, resume))
                     },
+                    onSwitchSource = { s, id ->
+                        nav.navigate(Routes.detail(s, id)) {
+                            popUpTo(Routes.DETAIL) { inclusive = true }
+                        }
+                    },
                 )
             }
             composable(
@@ -166,6 +171,11 @@ fun DreamNavRoot(app: AppViewModel) {
                     onBack = { nav.popBackStack() },
                     onPlayEpisode = { s, id, ep ->
                         nav.navigate(Routes.player(s, id, ep)) {
+                            popUpTo(Routes.PLAYER.substringBefore('?')) { inclusive = true }
+                        }
+                    },
+                    onSwitchSource = { s, id, resume ->
+                        nav.navigate(Routes.player(s, id, 0, resume)) {
                             popUpTo(Routes.PLAYER.substringBefore('?')) { inclusive = true }
                         }
                     },
