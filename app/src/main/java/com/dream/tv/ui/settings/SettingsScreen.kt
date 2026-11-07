@@ -267,11 +267,78 @@ fun SettingsScreen(app: AppViewModel, onOpenSources: () -> Unit) {
             Text("Dream TV · Android", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = glass.textPrimary)
             Spacer(Modifier.height(4.dp))
             Text(
-                "v1.0.0 · 78 个苹果CMS源内置 · 与桌面版同源同款\n液态玻璃 + 沉浸壁纸 UI，参考「拾音」",
+                "v${com.dream.tv.BuildConfig.VERSION_NAME} · 78 个苹果CMS源内置 · 液态玻璃 + 沉浸壁纸 UI",
                 fontSize = 12.sp,
                 color = glass.textSecondary,
                 lineHeight = 18.sp,
             )
+            Spacer(Modifier.height(12.dp))
+            // 检查更新
+            val updState = app.update.collectAsStateWithLifecycle().value
+            val upd = updState
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    when {
+                        upd.checking -> Text("正在检查更新…", fontSize = 12.sp, color = glass.textSecondary)
+                        upd.error -> Text("检查失败，点右侧重试", fontSize = 12.sp, color = Color(0xFFE05A4E))
+                        upd.isNewer && upd.latest != null ->
+                            Text("发现新版本 v${upd.latest.version}", fontSize = 12.sp, color = glass.accent, fontWeight = FontWeight.SemiBold)
+                        upd.checked -> Text("已是最新版本", fontSize = 12.sp, color = glass.textSecondary)
+                        else -> Text("有新版本会在启动时提醒", fontSize = 12.sp, color = glass.textSecondary)
+                    }
+                }
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(glass.accent.copy(alpha = 0.18f))
+                        .glassClick { app.checkUpdate(manual = true) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        if (upd.checking) "…" else "检查更新",
+                        fontSize = 12.sp, color = glass.accent, fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+            if (upd.isNewer && upd.latest != null) {
+                val latestInfo = upd.latest!!
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    (latestInfo.notes ?: "")
+                        .replace(Regex("#+\\s*"), "")
+                        .replace(Regex("\\*+"), "")
+                        .lines().take(3).joinToString("\n").ifBlank { "详见 Release 页面" },
+                    fontSize = 11.sp,
+                    color = glass.textSecondary,
+                    lineHeight = 16.sp,
+                    maxLines = 3,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(glass.accent)
+                            .glassClick(onClick = {
+                                val url = latestInfo.apkUrl ?: latestInfo.pageUrl
+                                runCatching {
+                                    context.startActivity(
+                                        android.content.Intent(
+                                            android.content.Intent.ACTION_VIEW,
+                                            android.net.Uri.parse(url)
+                                        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }
+                            })
+                            .padding(vertical = 9.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("去下载 v${latestInfo.version}", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
         }
 
         Spacer(Modifier.height(128.dp))

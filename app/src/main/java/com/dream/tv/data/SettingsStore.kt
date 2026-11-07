@@ -3,10 +3,12 @@ package com.dream.tv.data
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 
@@ -50,6 +52,7 @@ class SettingsStore(private val context: Context) {
         val wallpaperGradient = stringPreferencesKey("wallpaper_gradient")
         val wallpaperPath = stringPreferencesKey("wallpaper_path")
         val disabledSources = stringSetPreferencesKey("disabled_sources")
+        val lastUpdateCheck = longPreferencesKey("last_update_check")
     }
 
     val settings: Flow<GlassSettings> = context.settingsStore.data.map { p ->
@@ -84,4 +87,11 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun resetSources() = context.settingsStore.edit { it.remove(Keys.disabledSources) }
+
+    /** 上次检查更新的时间戳（静默检查 24h 节流用） */
+    suspend fun lastUpdateCheck(): Long =
+        context.settingsStore.data.map { it[Keys.lastUpdateCheck] ?: 0L }.first()
+
+    suspend fun setLastUpdateCheck(ts: Long) =
+        context.settingsStore.edit { it[Keys.lastUpdateCheck] = ts }
 }
