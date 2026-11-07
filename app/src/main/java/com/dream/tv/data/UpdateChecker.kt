@@ -19,6 +19,14 @@ object UpdateChecker {
     private const val LATEST_PAGE = "https://github.com/$REPO/releases/latest"
     private const val LATEST_API = "https://api.github.com/repos/$REPO/releases/latest"
 
+    /** GitHub release 资产加速镜像（大陆直连 objects/release-assets 被限速到几十 KB/s，经镜像实测 ~2MB/s） */
+    const val GH_MIRROR = "https://ghfast.top/"
+
+    /** APK 直链转加速链接；仅处理 /releases/download/ 路径，Release 页面等原样返回 */
+    fun accelerated(url: String): String =
+        if (url.startsWith("https://github.com/") && url.contains("/releases/download/")) GH_MIRROR + url
+        else url
+
     @Serializable
     data class GhAsset(
         val name: String = "",

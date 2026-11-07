@@ -350,7 +350,7 @@ fun SettingsScreen(app: AppViewModel, onOpenSources: () -> Unit) {
                             .clip(RoundedCornerShape(16.dp))
                             .background(glass.accent)
                             .glassClick(onClick = {
-                                val url = latestInfo.apkUrl ?: latestInfo.pageUrl
+                                val url = com.dream.tv.data.UpdateChecker.accelerated(latestInfo.apkUrl ?: latestInfo.pageUrl)
                                 runCatching {
                                     context.startActivity(
                                         android.content.Intent(

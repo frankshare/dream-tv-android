@@ -153,7 +153,7 @@ private fun UpdateDialog(info: com.dream.tv.data.UpdateChecker.ReleaseInfo, onDi
                             .background(glass.accent)
                             .glassClick(onClick = {
                                 onDismiss()
-                                val url = info.apkUrl ?: info.pageUrl
+                                val url = com.dream.tv.data.UpdateChecker.accelerated(info.apkUrl ?: info.pageUrl)
                                 runCatching {
                                     context.startActivity(
                                         android.content.Intent(
