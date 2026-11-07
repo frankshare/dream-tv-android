@@ -9,8 +9,10 @@ import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,6 +35,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -103,7 +107,6 @@ fun PlayerScreen(
     startEpisode: Int,
     resumeMs: Long,
     onBack: () -> Unit,
-    onPlayEpisode: (String, String, Int) -> Unit,
     onSwitchSource: (String, String, Long) -> Unit,
 ) {
     val glass = LocalGlassColors.current
@@ -126,6 +129,9 @@ fun PlayerScreen(
 
     val episodes = detail?.episodes.orEmpty()
     val episode = episodes.getOrNull(episodeIndex)
+    fun switchEpisode(idx: Int) {
+        if (idx in episodes.indices && idx != episodeIndex) episodeIndex = idx
+    }
 
     val player = remember {
         val adFilterOn = kotlinx.coroutines.runBlocking {
@@ -236,7 +242,7 @@ fun PlayerScreen(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 // 自动连播：播完自动下一集
                 if (playbackState == Player.STATE_ENDED && episodeIndex + 1 < episodes.size) {
-                    onPlayEpisode(sourceId, vodId, episodeIndex + 1)
+                    switchEpisode(episodeIndex + 1)
                 }
             }
         }
@@ -314,6 +320,12 @@ fun PlayerScreen(
             delay(3_500)
             controlsVisible = false
         }
+    }
+
+    // 返回键/侧滑返回：面板开着时只关面板，不退出播放器
+    val panelOpen = drawer || speedMenu || aspectMenu || ioPanel || sourceSheet
+    androidx.activity.compose.BackHandler(enabled = panelOpen) {
+        drawer = false; speedMenu = false; aspectMenu = false; ioPanel = false; sourceSheet = false
     }
 
     // ---------- 手势状态 ----------
@@ -696,15 +708,12 @@ fun PlayerScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(format(positionMs), color = Color.White.copy(alpha = 0.9f), fontSize = 11.sp)
-                        Slider(
-                            value = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f,
-                            onValueChange = { frac -> if (durationMs > 0) player.seekTo((frac * durationMs).toLong()) },
-                            colors = SliderDefaults.colors(
-                                thumbColor = glass.accent,
-                                activeTrackColor = glass.accent,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.25f),
-                            ),
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp).height(26.dp),
+                        PlayerSeekBar(
+                            positionMs = positionMs,
+                            durationMs = durationMs,
+                            accent = glass.accent,
+                            onSeek = { player.seekTo(it) },
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                         )
                         Text(format(durationMs), color = Color.White.copy(alpha = 0.9f), fontSize = 11.sp)
                     }
@@ -722,12 +731,12 @@ fun PlayerScreen(
                         Spacer(Modifier.width(14.dp))
                         if (episodeIndex > 0) {
                             Icon(DtIcons.SkipPrevious, "上一集", tint = Color.White,
-                                modifier = Modifier.size(34.dp).padding(4.dp).glassClick { onPlayEpisode(sourceId, vodId, episodeIndex - 1) })
+                                modifier = Modifier.size(34.dp).padding(4.dp).glassClick { switchEpisode(episodeIndex - 1) })
                             Spacer(Modifier.width(14.dp))
                         }
                         if (episodeIndex + 1 < episodes.size) {
                             Icon(DtIcons.SkipNext, "下一集", tint = Color.White,
-                                modifier = Modifier.size(34.dp).padding(4.dp).glassClick { onPlayEpisode(sourceId, vodId, episodeIndex + 1) })
+                                modifier = Modifier.size(34.dp).padding(4.dp).glassClick { switchEpisode(episodeIndex + 1) })
                         }
                         Spacer(Modifier.weight(1f))
                         Box(
@@ -786,28 +795,38 @@ fun PlayerScreen(
                     }
                 },
             )
+        }
 
-            // 选集抽屉（半屏网格）
-            AnimatedVisibility(
-                visible = drawer,
-                enter = slideInVertically { it },
-                exit = slideOutVertically { it },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            ) {
+        // 选集侧边抽屉（右滑出，占约半屏宽）
+        AnimatedVisibility(
+            visible = drawer,
+            enter = slideInHorizontally { it } + fadeIn(),
+            exit = slideOutHorizontally { it } + fadeOut(),
+            modifier = Modifier.align(Alignment.CenterEnd),
+        ) {
+            Row(Modifier.fillMaxWidth().fillMaxHeight()) {
+                Box(
+                    Modifier
+                        .weight(0.55f)
+                        .fillMaxHeight()
+                        .background(Color.Black.copy(alpha = 0.4f))
+                        .pointerInput(Unit) { detectTapGestures { drawer = false } }
+                )
                 GlassSurface(
-                    Modifier.fillMaxWidth().fillMaxHeight(0.5f),
-                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                    Modifier.weight(0.45f).fillMaxHeight(),
+                    shape = RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp),
                 ) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
                         Text(
                             "选集（${episodes.size}）",
                             color = glass.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
                         )
                         Spacer(Modifier.height(10.dp))
                         LazyVerticalGrid(
-                            columns = GridCells.Fixed(6),
+                            columns = GridCells.Fixed(3),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f),
                         ) {
                             itemsIndexed(episodes) { idx, ep ->
                                 val isCur = idx == episodeIndex
@@ -820,9 +839,9 @@ fun PlayerScreen(
                                         )
                                         .glassClick {
                                             drawer = false
-                                            if (idx != episodeIndex) onPlayEpisode(sourceId, vodId, idx)
+                                            switchEpisode(idx)
                                         }
-                                        .padding(vertical = 9.dp),
+                                        .padding(vertical = 9.dp, horizontal = 6.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Text(
@@ -958,4 +977,94 @@ private fun format(ms: Long): String {
     val m = (total % 3600) / 60
     val s = total % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
+}
+
+
+/** 主流样式进度条：细轨道 + 拖拽放大手柄 + 时间气泡；拖动中只预览、松手才 seek */
+@Composable
+private fun PlayerSeekBar(
+    positionMs: Long,
+    durationMs: Long,
+    accent: Color,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var dragFrac by remember { mutableStateOf<Float?>(null) }
+    BoxWithConstraints(
+        modifier
+            .height(30.dp)
+            .pointerInput(durationMs) {
+                detectTapGestures { off ->
+                    if (durationMs > 0) {
+                        onSeek(((off.x / size.width.toFloat()) * durationMs).toLong().coerceIn(0, durationMs))
+                    }
+                }
+            }
+            .pointerInput(durationMs) {
+                detectDragGestures(
+                    onDragStart = { off ->
+                        if (durationMs > 0) dragFrac = (off.x / size.width.toFloat()).coerceIn(0f, 1f)
+                    },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        if (durationMs > 0) dragFrac = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                    },
+                    onDragEnd = {
+                        dragFrac?.let { f -> onSeek((f * durationMs).toLong()) }
+                        dragFrac = null
+                    },
+                    onDragCancel = { dragFrac = null },
+                )
+            }
+    ) {
+        val density = LocalDensity.current
+        val frac = dragFrac ?: if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
+        val trackH = 3.dp
+        val thumbR = if (dragFrac != null) 7.dp else 5.dp
+
+        val trackW = constraints.maxWidth.toFloat()
+        val thumbPx = with(density) { thumbR.toPx() }
+        Box(
+            Modifier.align(Alignment.CenterStart).fillMaxWidth().height(24.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Box(
+                Modifier.fillMaxWidth().height(trackH)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White.copy(alpha = 0.22f))
+            )
+            Box(
+                Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).height(trackH)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(accent)
+            )
+            Box(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = with(density) {
+                        ((frac * trackW) - thumbPx).roundToInt().toDp()
+                    })
+                    .size(thumbR * 2)
+                    .clip(CircleShape)
+                    .background(accent)
+            )
+        }
+
+        // 拖动时间气泡
+        dragFrac?.let { f ->
+            val bubbleX = (f * constraints.maxWidth - 90f).coerceIn(0f, constraints.maxWidth - 180f)
+            Text(
+                format((f * durationMs).toLong()),
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = with(density) { bubbleX.roundToInt().toDp() }, y = 2.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            )
+        }
+    }
 }

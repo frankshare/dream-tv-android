@@ -169,11 +169,6 @@ fun DreamNavRoot(app: AppViewModel) {
                     startEpisode = entry.arguments?.getInt("episodeIndex") ?: 0,
                     resumeMs = entry.arguments?.getLong("resumeMs") ?: 0L,
                     onBack = { nav.popBackStack() },
-                    onPlayEpisode = { s, id, ep ->
-                        nav.navigate(Routes.player(s, id, ep)) {
-                            popUpTo(Routes.PLAYER.substringBefore('?')) { inclusive = true }
-                        }
-                    },
                     onSwitchSource = { s, id, resume ->
                         nav.navigate(Routes.player(s, id, 0, resume)) {
                             popUpTo(Routes.PLAYER.substringBefore('?')) { inclusive = true }
